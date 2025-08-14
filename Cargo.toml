@@ -1,9 +1,9 @@
 [package]
 name = "trafic"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
-macroquad = "0.4"
+macroquad = "0.3"
 rand = "0.8"
 
