@@ -176,16 +176,25 @@ fn calculate_green_duration(cars: &Vec<Car>, lights: &Vec<Light>, green_idx: usi
         .filter(|car| {
             let cx = screen_width() / 2.0;
             let cy = screen_height() / 2.0;
-            match car.dir {
-                (0.0, 5.0) => (cy - car.y) < 200.0,
-                (0.0, -5.0) => (car.y - cy) < 200.0,
-                (5.0, 0.0) => (cx - car.x) < 200.0,
-                (-5.0, 0.0) => (car.x - cx) < 200.0,
-                _ => false,
+            if car.dir == (0.0, 5.0) {
+                (cy - car.y) < 200.0
+            } else if car.dir == (0.0, -5.0) {
+                (car.y - cy) < 200.0
+            } else if car.dir == (5.0, 0.0) {
+                (cx - car.x) < 200.0
+            } else if car.dir == (-5.0, 0.0) {
+                (car.x - cx) < 200.0
+            } else {
+                false
             }
         })
         .count();
-    (count as f64 * MIN_GREEN_DURATION).min(MAX_GREEN_DURATION)
+    
+    if count == 0 {
+        2.0  // Minimum 2 seconds even when no cars
+    } else {
+        (count as f64 * MIN_GREEN_DURATION).min(MAX_GREEN_DURATION)
+    }
 }
 
 fn turn_light(lights: &mut Vec<Light>, cars: &Vec<Car>) {
@@ -214,7 +223,11 @@ fn turn_light(lights: &mut Vec<Light>, cars: &Vec<Car>) {
                     let green_duration = calculate_green_duration(cars, lights, green_idx);
 
                     for (i, light) in lights.iter_mut().enumerate() {
-                        light.green = i == green_idx && green_duration != 0.0;
+                        if i == green_idx && green_duration > 0.0 {
+                            light.green = true;
+                        } else {
+                            light.green = false;
+                        }
                     }
                 }
             }
@@ -282,12 +295,16 @@ fn should_stop_at_light(car: &Car, lights: &Vec<Light>) -> bool {
         if light.green {
             return false;
         }
-        match car.dir {
-            (0.0, 5.0) => car.y + 2.0 * INTERSECTION_SIZE == cy,
-            (0.0, -5.0) => car.y - INTERSECTION_SIZE == cy,
-            (5.0, 0.0) => car.x + 2.0 * INTERSECTION_SIZE == cx,
-            (-5.0, 0.0) => car.x - INTERSECTION_SIZE == cx,
-            _ => false,
+        if car.dir == (0.0, 5.0) {
+            car.y + 2.0 * INTERSECTION_SIZE == cy
+        } else if car.dir == (0.0, -5.0) {
+            car.y - INTERSECTION_SIZE == cy
+        } else if car.dir == (5.0, 0.0) {
+            car.x + 2.0 * INTERSECTION_SIZE == cx
+        } else if car.dir == (-5.0, 0.0) {
+            car.x - INTERSECTION_SIZE == cx
+        } else {
+            false
         }
     } else {
         false
@@ -300,18 +317,16 @@ fn try_turn(car: &mut Car) {
     }
     let cx = screen_width() / 2.0;
     let cy = screen_height() / 2.0;
-    let can_turn = match (car.dir, car.turn) {
-        ((5.0, 0.0), Turns::Right) | ((0.0, 5.0), Turns::Left) => {
-            (car.x, car.y) == (cx - INTERSECTION_SIZE, cy)
-        }
-        ((-5.0, 0.0), Turns::Left) | ((0.0, 5.0), Turns::Right) => {
-            (car.x, car.y) == (cx - INTERSECTION_SIZE, cy - INTERSECTION_SIZE)
-        }
-        ((-5.0, 0.0), Turns::Right) | ((0.0, -5.0), Turns::Left) => {
-            (car.x, car.y) == (cx, cy - INTERSECTION_SIZE)
-        }
-        ((0.0, -5.0), Turns::Right) | ((5.0, 0.0), Turns::Left) => (car.x, car.y) == (cx, cy),
-        _ => false,
+    let can_turn = if (car.dir == (5.0, 0.0) && car.turn == Turns::Right) || (car.dir == (0.0, 5.0) && car.turn == Turns::Left) {
+        (car.x, car.y) == (cx - INTERSECTION_SIZE, cy)
+    } else if (car.dir == (-5.0, 0.0) && car.turn == Turns::Left) || (car.dir == (0.0, 5.0) && car.turn == Turns::Right) {
+        (car.x, car.y) == (cx - INTERSECTION_SIZE, cy - INTERSECTION_SIZE)
+    } else if (car.dir == (-5.0, 0.0) && car.turn == Turns::Right) || (car.dir == (0.0, -5.0) && car.turn == Turns::Left) {
+        (car.x, car.y) == (cx, cy - INTERSECTION_SIZE)
+    } else if (car.dir == (0.0, -5.0) && car.turn == Turns::Right) || (car.dir == (5.0, 0.0) && car.turn == Turns::Left) {
+        (car.x, car.y) == (cx, cy)
+    } else {
+        false
     };
 
     if can_turn {
@@ -347,16 +362,14 @@ fn car_too_close(car: &Car, others: &Vec<Car>) -> bool {
         let dx = other.x - car.x;
         let dy = other.y - car.y;
 
-        match car.dir {
-            (0.0, 5.0) if dy > 0.0 && dx.abs() < INTERSECTION_SIZE && dy < MIN_GAP => return true,
-            (0.0, -5.0) if dy < 0.0 && dx.abs() < INTERSECTION_SIZE && -dy < MIN_GAP => {
-                return true;
-            }
-            (5.0, 0.0) if dx > 0.0 && dy.abs() < INTERSECTION_SIZE && dx < MIN_GAP => return true,
-            (-5.0, 0.0) if dx < 0.0 && dy.abs() < INTERSECTION_SIZE && -dx < MIN_GAP => {
-                return true;
-            }
-            _ => {}
+        if car.dir == (0.0, 5.0) && dy > 0.0 && dx.abs() < INTERSECTION_SIZE && dy < MIN_GAP {
+            return true;
+        } else if car.dir == (0.0, -5.0) && dy < 0.0 && dx.abs() < INTERSECTION_SIZE && -dy < MIN_GAP {
+            return true;
+        } else if car.dir == (5.0, 0.0) && dx > 0.0 && dy.abs() < INTERSECTION_SIZE && dx < MIN_GAP {
+            return true;
+        } else if car.dir == (-5.0, 0.0) && dx < 0.0 && dy.abs() < INTERSECTION_SIZE && -dx < MIN_GAP {
+            return true;
         }
     }
     false
